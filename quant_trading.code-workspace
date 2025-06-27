@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+        "python.defaultInterpreterPath": "",
+        "python.terminal.activateEnvironment": true
+    }
+}
