@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import yfinance as yf
+from engine import backtest
 
 def ema_crossover(df, fast_span=10, slow_span=20):
     """
@@ -14,7 +16,7 @@ def ema_crossover(df, fast_span=10, slow_span=20):
     - ema_crossover_dataframe: DataFrame with columns ['Close', 'ema_fast', 'ema_slow', 'signal']
       - 'ema_fast': fast EMA
       - 'ema_slow': slow EMA
-      - 'signal': trading signal:
+      - 'signal': trading signal: 
           * +1 = buy (fast ema crosses above slow ema)
           * -1 = sell (fast ema crosses below slow ema)
           * 0 = hold / no action
@@ -35,14 +37,15 @@ def ema_crossover(df, fast_span=10, slow_span=20):
     ema_crossover_dataframe = df[['Close', 'ema_fast', 'ema_slow', 'signal']]
     return ema_crossover_dataframe
 
+# put your testing code under main guard
+if __name__ == "__main__":
+    
+    df_raw = yf.download("AAPL", start="2022-01-01", end="2024-01-01")
+    ema_crossover_dataframe = ema_crossover(df_raw)
+    # If columns are MultiIndex (like when yfinance adds Ticker), flatten them
+    if isinstance(ema_crossover_dataframe.columns, pd.MultiIndex):
+        ema_crossover_dataframe.columns = ['_'.join([str(c) for c in col if c]) for col in ema_crossover_dataframe.columns]
 
-# Usage example (if you want to test it):
-
-import yfinance as yf
-from engine.backtest import backtest,save_results_to_excel
-
-df_raw = yf.download("AAPL", start="2022-01-01", end="2024-01-01")
-ema_crossover_dataframe = ema_crossover(df_raw, fast_span=10, slow_span=20)
-
-results = backtest(ema_crossover_dataframe)
-print(results)
+    print(ema_crossover_dataframe)
+    # results = backtest(ema_crossover_dataframe)
+    # print(results)

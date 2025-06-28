@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from openpyxl import load_workbook
 
 def backtest(df, initial_capital=100000, fee=0.0, plot=False):
     """
@@ -24,6 +25,7 @@ def backtest(df, initial_capital=100000, fee=0.0, plot=False):
     trades = []
 
     for price, signal in zip(df['Close'], df['signal']):
+        # price = float(price)
         if signal == 1 and position == 0:
             position = capital / price
             capital = 0
@@ -34,6 +36,7 @@ def backtest(df, initial_capital=100000, fee=0.0, plot=False):
             capital = position * exit_price
             position = 0
             trades.append(('sell', exit_price))
+
         equity.append(capital + position * price)
 
     equity = pd.Series(equity, index=df.index)
@@ -93,22 +96,31 @@ def backtest(df, initial_capital=100000, fee=0.0, plot=False):
 
 def save_results_to_excel(results_dict, filename='strategies_results.xlsx'):
     """
-    Save multiple strategy results dict to a single Excel file,
-    each strategy in its own sheet.
-    
-    Parameters:
-    - results_dict: dict with keys = strategy names, values = DataFrame or dict results
-    - filename: Excel file name
-    
-    Example:
-    results_dict = {
-        'ema': ema_results_df,
-        'rsi': rsi_results_df,
-    }
+    Append multiple strategy results to an Excel file.
+    Each strategy saves in its own sheet: if sheet exists, append to it;
+    if not, create new sheet.
     """
-    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-        for strat_name, df in results_dict.items():
-            if isinstance(df, pd.DataFrame):
+    if os.path.exists(filename):
+        # Open existing workbook
+        book = load_workbook(filename)
+        with pd.ExcelWriter(filename, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+            # writer.book = book
+            for strat_name, df in results_dict.items():
+                # Check if sheet exists in workbook
+                if strat_name in writer.book.sheetnames:
+                    # Load existing sheet data into DataFrame
+                    existing_df = pd.read_excel(filename, sheet_name=strat_name)
+                    # Concatenate existing + new
+                    updated_df = pd.concat([existing_df, df], ignore_index=True)
+                    # Remove old sheet first (to avoid duplicated data)
+                    std = writer.book[strat_name]
+                    writer.book.remove(std)
+                    # Write updated DataFrame back to the sheet
+                    updated_df.to_excel(writer, sheet_name=strat_name, index=False)
+                else:
+                    df.to_excel(writer, sheet_name=strat_name, index=False)
+    else:
+        # If file doesn't exist yet, just create new one
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            for strat_name, df in results_dict.items():
                 df.to_excel(writer, sheet_name=strat_name, index=False)
-            else:
-                pd.DataFrame([df]).to_excel(writer, sheet_name=strat_name, index=False)
