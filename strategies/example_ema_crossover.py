@@ -27,11 +27,15 @@ def ema_crossover(df, fast_span=10, slow_span=20):
     df['ema_fast'] = df['Close'].ewm(span=fast_span, adjust=False).mean()
     df['ema_slow'] = df['Close'].ewm(span=slow_span, adjust=False).mean()
 
-    # generate raw signal: 1 when fast > slow, otherwise 0
-    df['signal'] = np.where(df['ema_fast'] > df['ema_slow'], 1, 0)
-
-    # convert to trading events: +1 = crossover up, -1 = crossover down
-    df['signal'] = df['signal'].diff().fillna(0).astype(int)
+    # 更清晰的信号生成
+    df['position'] = np.where(df['ema_fast'] > df['ema_slow'], 1, -1)
+    df['signal'] = df['position'].diff().fillna(0)
+    # 或者更明确的交叉信号
+    df['signal'] = 0
+    df['signal'] = np.where((df['ema_fast'] > df['ema_slow']) & 
+                        (df['ema_fast'].shift(1) <= df['ema_slow'].shift(1)), 1, df['signal'])
+    df['signal'] = np.where((df['ema_fast'] < df['ema_slow']) & 
+                        (df['ema_fast'].shift(1) >= df['ema_slow'].shift(1)), -1, df['signal'])
 
     # build final result DataFrame
     ema_crossover_dataframe = df[['Close', 'ema_fast', 'ema_slow', 'signal']]

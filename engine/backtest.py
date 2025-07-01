@@ -96,31 +96,74 @@ def backtest(df, initial_capital=100000, fee=0.0, plot=False):
 
 def save_results_to_excel(results_dict, filename='strategies_results.xlsx'):
     """
-    Append multiple strategy results to an Excel file.
-    Each strategy saves in its own sheet: if sheet exists, append to it;
-    if not, create new sheet.
+    Save strategy results to an Excel file, with each ticker saved to a separate sheet,
+    avoiding duplicate saves of the same ticker + strategy combination.
+
+    Parameters:
+    - results_dict: dict, format {ticker: DataFrame}
+    - filename: str, Excel file name
     """
+    
+    # Check if the file exists
     if os.path.exists(filename):
-        # Open existing workbook
-        book = load_workbook(filename)
-        with pd.ExcelWriter(filename, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
-            # writer.book = book
-            for strat_name, df in results_dict.items():
-                # Check if sheet exists in workbook
-                if strat_name in writer.book.sheetnames:
-                    # Load existing sheet data into DataFrame
-                    existing_df = pd.read_excel(filename, sheet_name=strat_name)
-                    # Concatenate existing + new
-                    updated_df = pd.concat([existing_df, df], ignore_index=True)
-                    # Remove old sheet first (to avoid duplicated data)
-                    std = writer.book[strat_name]
-                    writer.book.remove(std)
-                    # Write updated DataFrame back to the sheet
-                    updated_df.to_excel(writer, sheet_name=strat_name, index=False)
-                else:
-                    df.to_excel(writer, sheet_name=strat_name, index=False)
+        try:
+            # Read existing data from all sheets
+            existing_sheets = pd.read_excel(filename, sheet_name=None)
+        except:
+            existing_sheets = {}
     else:
-        # If file doesn't exist yet, just create new one
+        existing_sheets = {}
+
+    # Prepare data to write
+    sheets_to_write = {}
+    total_saved = 0
+    total_skipped = 0
+
+    for ticker, df in results_dict.items():
+        if df.empty:
+            continue
+
+        strategy_name = df.iloc[0]['strategy_name'] if 'strategy_name' in df.columns else 'unknown'
+
+        # Check if the sheet for this ticker already exists
+        if ticker in existing_sheets:
+            existing_df = existing_sheets[ticker]
+
+            # Check if the same strategy already exists
+            if 'strategy_name' in existing_df.columns:
+                existing_strategies = existing_df['strategy_name'].tolist()
+                if strategy_name in existing_strategies:
+                    print(f"Skipping {ticker} + {strategy_name}: already exists")
+                    total_skipped += 1
+                    # Keep existing data unchanged
+                    sheets_to_write[ticker] = existing_df
+                    continue
+
+            # Merge existing and new data
+            combined_df = pd.concat([existing_df, df], ignore_index=True)
+            sheets_to_write[ticker] = combined_df
+            print(f"Saving {ticker} + {strategy_name}")
+            total_saved += 1
+        else:
+            # New ticker: save directly
+            sheets_to_write[ticker] = df
+            print(f"Saving {ticker} + {strategy_name} (new ticker)")
+            total_saved += 1
+
+    # Keep other sheets that were not updated
+    for sheet_name, sheet_df in existing_sheets.items():
+        if sheet_name not in sheets_to_write:
+            sheets_to_write[sheet_name] = sheet_df
+
+    # Write to the Excel file
+    if sheets_to_write:
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-            for strat_name, df in results_dict.items():
-                df.to_excel(writer, sheet_name=strat_name, index=False)
+            for sheet_name, df in sheets_to_write.items():
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        print(f"✅ Saved {total_saved} new records to {filename}")
+    else:
+        print("ℹ️ No data to save")
+
+    if total_skipped > 0:
+        print(f"⏭️ Skipped {total_skipped} duplicate records")
